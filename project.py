@@ -6,8 +6,8 @@ import sys
 from tabulate import tabulate
 
 # Default file names and shared CSV header
-DEFAULT_EXPENSES_FILE = "expenses.csv"
-DEFAULT_PEOPLE_FILE = "people.txt"
+DEFAULT_EXPENSES_FILE = "workingFiles/expenses.csv"
+DEFAULT_PEOPLE_FILE = "workingFiles/people.txt"
 CSV_HEADERS = ["Item", "Amount", "Payer", "Participants"]
 SEPARATOR_WIDTH = 60
 NEGATIVE_CONFIRMED_ONCE = False
@@ -112,6 +112,36 @@ def read_people_file(path: str) -> list[str]:
 def normalize_name(name: str) -> str:
     name = name.strip()
     return "GRP" if name.upper() == "GRP" else name.lower()
+
+
+def normalize_people_file(path: str) -> None:
+    if not os.path.exists(path):
+        return
+    with open(path, "r", newline="") as file:
+        names = [normalize_name(line) for line in file if line.strip()]
+    with open(path, "w", newline="") as file:
+        for name in names:
+            file.write(name + "\n")
+
+
+def normalize_expenses_file(path: str) -> None:
+    if not os.path.exists(path):
+        return
+    rows: list[list[str]] = []
+    with open(path, "r", newline="") as file:
+        reader = csv.reader(file)
+        for row in reader:
+            if len(row) < 4:
+                continue
+            item = normalize_name(row[0])
+            amount = row[1].strip()
+            payer = normalize_name(row[2])
+            participants = [normalize_name(p) for p in row[3].split(",") if p.strip()]
+            rows.append([item, amount, payer, ",".join(participants)])
+    with open(path, "w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(CSV_HEADERS)
+        writer.writerows(rows)
 
 
 def collect_people(existing: list[str] | None = None) -> list[str] | None:
@@ -333,6 +363,7 @@ def start_new_session() -> bool:
         return False
     write_people_file(people, DEFAULT_PEOPLE_FILE)
     print_status("People list saved.")
+    normalize_people_file(DEFAULT_PEOPLE_FILE)
     return True
 
 
@@ -396,6 +427,7 @@ def load_session() -> bool:
             print_status("Failed to sync people file.")
             print_divider()
             return False
+        normalize_people_file(DEFAULT_PEOPLE_FILE)
     else:
         people = people_from_expenses(expenses_filename)
         if len(people) < 2:
@@ -404,6 +436,7 @@ def load_session() -> bool:
             print_divider()
             return False
         write_people_file(sorted(people), DEFAULT_PEOPLE_FILE)
+        normalize_people_file(DEFAULT_PEOPLE_FILE)
         print_status(f"Generated {DEFAULT_PEOPLE_FILE} from {expenses_filename}.")
         maybe_extend_people(DEFAULT_PEOPLE_FILE)
 
@@ -413,7 +446,9 @@ def load_session() -> bool:
             print_status(f"Copied {expenses_filename} -> {DEFAULT_EXPENSES_FILE}.")
         else:
             print_status(f"Using existing {DEFAULT_EXPENSES_FILE}.")
+        normalize_expenses_file(DEFAULT_EXPENSES_FILE)
         ensure_expenses_header(DEFAULT_EXPENSES_FILE)
+        condense_grp_entries(DEFAULT_EXPENSES_FILE, DEFAULT_PEOPLE_FILE)
     except OSError:
         print_status("Failed to sync expenses file.")
         print_divider()

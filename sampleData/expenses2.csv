@@ -1,0 +1,5 @@
+item,amount,payer,participants
+Pizza,10,Alice,GRP
+Burger,15,Bob,Bob
+Taxi,5,Charlie,GRP
+Water,9,alice,"alice,charlie"
