@@ -1,0 +1,80 @@
+Start Menu (boot flow)
+ 1) INITIALIZE NEW
+    Purpose: create fresh session files.
+    Inputs: list of people (names, unique, non-empty).
+    Actions: write people.txt; create expenses.csv with headers.
+    Errors to catch:
+      - Empty name or duplicate -> re-prompt.
+      - User ends with empty input -> stop collecting, only proceed if >=2 people.
+    Handling: loop on bad input; show count added; confirm overwrite if files already exist.
+
+2) CONTINUE
+    Purpose: resume existing session.
+    Checks: expenses.csv and people.txt (default names) must exist and match.
+    Errors to catch:
+      - Missing files -> message and return to Start Menu.
+      - People mismatch (payer/participant not in people.txt) -> flag "files corrupted", return.
+    Handling: no edits to files; only proceed to Function Menu on success.
+
+  3) LOAD (import from provided files)
+    Purpose: load arbitrary expenses file, optionally separate people file.
+    Inputs: expenses filename (required); people filename (required only if GRP present).
+    Rules:
+      - If any row participant contains GRP, require people.txt; verify match_people.
+      - If no GRP, auto-build people.txt (default name) from unique payers/participants; warn before overwriting existing.
+      - Extension option only for non-GRP imports (GRP already implies full list).
+    Errors to catch:
+      - File not found -> re-prompt.
+      - Corrupted (people mismatch) -> re-prompt both filenames.
+      - Fewer than 2 unique people after auto-build -> abort load.
+    Handling: after success, proceed to Function Menu using loaded files.
+    Note: the supplied expenses file is copied to `expenses.csv` so the tracker always works off the default path.
+
+ 4) EXIT
+    Purpose: quit program.
+
+Function Menu (session actions)
+  1) ADD EXPENSE
+    Inputs:
+      - payer: must be in people list (single payer row).
+      - amount: float; allow negative but show one-time confirmation the first time negative is entered.
+      - item: short description, non-empty.
+      - participants: one or more from people list or GRP alias for all.
+    Actions: append row to expenses.csv.
+    Errors to catch/handle:
+      - Unknown payer or participant -> show list, re-prompt.
+      - Amount not numeric -> re-prompt.
+      - Negative amount entered -> confirm; remember choice to skip confirm next time if user said so.
+      - Empty item -> re-prompt.
+
+ 2) VIEW EXPENSES
+    Purpose: display all expense rows.
+    Output: table with item, amount, payer, participants list (expand GRP for display optional).
+    Errors: file missing -> tell user and return; malformed row -> skip with warning.
+
+  3) VIEW BALANCES
+    Purpose: show each person's net balance (paid minus share owed).
+    Inputs: none.
+    Logic: split each expense amount evenly among participants (GRP = all). Sum paid per payer; subtract owed share.
+    Errors: missing files or zero people -> message and return.
+    Output: table with name and balance (+ means others owe them).
+
+  4) SETTLE
+    Purpose: suggest who pays whom to zero balances.
+    Inputs: none.
+    Logic: standard greedy/transfer algorithm on positive vs negative balances.
+    Errors: missing data -> return with message.
+    Output: list of transfers (from, to, amount); also show remaining small residual if rounding.
+      Terminal: grids use `tabulate` to make both balances and settlements easy to read.
+
+ 5) EXIT
+    Purpose: back to OS; ensure files already saved.
+
+Cross-cutting error handling
+  - Invalid menu choice: keep prompting until valid integer within range.
+  - File I/O failures: show error, do not crash; return to previous menu.
+  - CSV format issues: skip bad rows with warning; advise user to fix file.
+  - Persistence: always write CSV with newline="" to avoid blank rows on Windows.
+  - Rounding: delay rounding until final display; store raw floats in calculations.
+  - Terminal UI: each major menu now displays a banner and ++status lines for clarity.
+  - Corruption path: load/continue failures now print a divider before re-rendering the Start Menu banner so the retry jump is clear.
