@@ -1,0 +1,3 @@
+Item,Amount,Payer,Participants
+LaSer Tag,60,ALICE,"Alice,Bob,Charlie"
+Dinner,90,Bob,"alice,CHARLIE"

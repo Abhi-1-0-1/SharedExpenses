@@ -32,14 +32,6 @@ def print_status(message: str) -> None:
     print(f"> {message}")
 
 
-class Person:
-    """Placeholder for future balance calculations."""
-
-    def __init__(self, name: str):
-        self.name = name
-        self.balance = 0.0
-
-
 class Expense:
     """Representation of a single expense."""
 
