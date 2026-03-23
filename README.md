@@ -29,6 +29,7 @@ SharedExpenses solves the classic “who owes whom?” problem after group outin
 ---
 
 ## Usage
+See the app in use [here](https://youtu.be/tyNXCdRL2AE). The Flask web application contains two main interfaces for encryption and decryption operations.
 
 Run the program from the `project` directory:
 
