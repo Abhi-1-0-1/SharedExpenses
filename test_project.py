@@ -21,11 +21,19 @@ def read_csv_rows(path: Path) -> list[list[str]]:
         return list(csv.reader(f))
 
 
-def test_normalize_expenses_adds_header_and_lowercases(tmp_path: Path):
-    exp_path = copy_sample(tmp_path, "expenses_missing_header.csv")
-    project.normalize_expenses_file(exp_path)
+def make_stores(tmp_path: Path, exp_name: str, people_name: str):
+    people_path = copy_sample(tmp_path, people_name)
+    exp_path = copy_sample(tmp_path, exp_name)
+    people_store = project.PeopleStore(people_path)
+    expense_store = project.ExpenseStore(exp_path, people_store)
+    return people_store, expense_store
 
-    rows = read_csv_rows(exp_path)
+
+def test_normalize_expenses_adds_header_and_lowercases(tmp_path: Path):
+    people_store, expense_store = make_stores(tmp_path, "expenses_missing_header.csv", "people_small.txt")
+    expense_store.normalize()
+
+    rows = read_csv_rows(expense_store.path)
     assert rows[0][:4] == project.CSV_HEADERS
 
     item, amount, payer, participants = rows[1][:4]
@@ -42,27 +50,23 @@ def test_normalize_expenses_adds_header_and_lowercases(tmp_path: Path):
 
 
 def test_condense_grp_entries_converts_full_list(tmp_path: Path):
-    people_path = copy_sample(tmp_path, "people_small.txt")
-    exp_path = copy_sample(tmp_path, "expenses_full_list.csv")
-
-    project.condense_grp_entries(exp_path, people_path)
-    rows = read_csv_rows(exp_path)
+    people_store, expense_store = make_stores(tmp_path, "expenses_full_list.csv", "people_small.txt")
+    expense_store.condense_grp()
+    rows = read_csv_rows(expense_store.path)
 
     assert rows[0][:4] == project.CSV_HEADERS
     assert rows[1][3] == "GRP"
 
 
 def test_match_people_detects_unknown(tmp_path: Path):
-    people_path = copy_sample(tmp_path, "people_small.txt")
-    exp_path = copy_sample(tmp_path, "expenses_invalid_name.csv")
-
-    assert project.match_people(exp_path, people_path) is False
+    people_store, expense_store = make_stores(tmp_path, "expenses_invalid_name.csv", "people_small.txt")
+    assert expense_store.match_people() is False
 
 
 def test_compute_balances_with_grp_expense():
     people = ["alice", "bob", "charlie"]
     expense = project.Expense(item="dinner", amount=90.0, payer="alice", participants=["GRP"])
-    balances = project.compute_balances([expense], people)
+    balances = project.BalanceCalculator.compute([expense], people)
 
     assert balances["alice"] == pytest.approx(60.0)
     assert balances["bob"] == pytest.approx(-30.0)
@@ -70,12 +74,12 @@ def test_compute_balances_with_grp_expense():
 
 
 def test_ensure_expenses_header_inserts_when_missing(tmp_path: Path):
-    exp_path = copy_sample(tmp_path, "expenses_missing_header.csv")
-    with exp_path.open("w", newline="") as f:
+    people_store, expense_store = make_stores(tmp_path, "expenses_missing_header.csv", "people_small.txt")
+    with expense_store.path.open("w", newline="") as f:
         f.write("pizza,10,alice,grp\n")
 
-    project.ensure_expenses_header(exp_path)
-    rows = read_csv_rows(exp_path)
+    expense_store.ensure_header()
+    rows = read_csv_rows(expense_store.path)
     assert rows[0][:4] == project.CSV_HEADERS
     assert rows[1][0] == "pizza"
 
@@ -84,6 +88,31 @@ def test_normalize_people_file_lowercases(tmp_path: Path):
     people_path = tmp_path / "people.txt"
     people_path.write_text("Alice\nBob\n")
 
-    project.normalize_people_file(people_path)
-    assert people_path.read_text().splitlines() == ["alice", "bob"]
+    store = project.PeopleStore(people_path)
+    store.normalize()
+    assert store.read() == ["alice", "bob"]
 
+
+def test_delete_expense_removes_selected_row_and_keeps_header(tmp_path: Path):
+    people_store, expense_store = make_stores(tmp_path, "expenses_missing_header.csv", "people_small.txt")
+    expense_store.normalize()
+
+    removed = expense_store.delete_expense(0)
+    rows = read_csv_rows(expense_store.path)
+
+    assert removed is not None
+    assert removed.item == "pizza"
+    assert rows[0][:4] == project.CSV_HEADERS
+    assert len(rows) == 2
+    assert rows[1][0] == "burger"
+
+
+def test_delete_expense_returns_none_for_invalid_index(tmp_path: Path):
+    people_store, expense_store = make_stores(tmp_path, "expenses_missing_header.csv", "people_small.txt")
+    expense_store.normalize()
+
+    removed = expense_store.delete_expense(10)
+    rows = read_csv_rows(expense_store.path)
+
+    assert removed is None
+    assert len(rows) == 3
